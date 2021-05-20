@@ -1,6 +1,7 @@
 import os
 import sys
 import databases.s22 as s22
+import databases.watercluster as watercluster
 
 def _gen_inputs_s22(testname, subset, template_path):
     if not os.path.isdir(testname):
@@ -48,6 +49,58 @@ def _gen_inputs_s22(testname, subset, template_path):
             else:
                 input.write(line)
 
+def _gen_inputs_watercluster(testname, subset, template_path, atomlimit=300):
+    if not os.path.isdir(testname):
+        os.system(f'mkdir {testname}')
+    
+    test_dir_path = os.path.join(testname, subset)
+    if not os.path.isdir(test_dir_path):
+        os.system(f'mkdir {test_dir_path}')
+    
+    watercluster_path = os.path.join(test_dir_path, 'watercluster')
+    if not os.path.isdir(watercluster_path):
+        os.system(f'mkdir {watercluster_path}')
+
+    input_dir_path = os.path.join(watercluster_path, 'inputs')
+    if not os.path.isdir(input_dir_path):
+        os.system(f'mkdir {input_dir_path}')
+
+    template_file = open(template_path, 'r')
+    template_lines = template_file.readlines()
+
+    for k, v in watercluster.clusters.items():
+        if k > atomlimit:
+            continue
+        input_file_path = os.path.join(input_dir_path, f'watercluster_{k}_atoms.in')
+        input = open(input_file_path, 'w')
+        for line in template_lines:
+            if '### MOLECULE ###' in line:
+                input.write(f'{v}\n')
+            else:
+                input.write(line)
+
+def _run_watercluster(testname, subset, psipath, ncore, atomlimit=300):
+    input_dir_path = os.path.join(testname, subset, 'watercluster', 'inputs')
+    if not os.path.isdir(input_dir_path):
+        raise Exception("You idiot! You have not made the inputs yet!!!")
+    
+    output_dir_path = os.path.join(testname, subset, 'watercluster', 'outputs')
+    if not os.path.isdir(output_dir_path):
+        os.system(f'mkdir {output_dir_path}')
+
+    timer_dir_path = os.path.join(testname, subset, 'watercluster', 'timings')
+    if not os.path.isdir(timer_dir_path):
+        os.system(f'mkdir {timer_dir_path}')
+
+    for k, v in watercluster.clusters.items():
+        if k > atomlimit:
+            continue
+        input_file_path = os.path.join(input_dir_path, f'watercluster_{k}_atoms.in')
+        cmd1 = f'{psipath} -n {ncore} {input_file_path}'
+        cmd2 = f'mv {input_dir_path}/watercluster_{k}_atoms.out {output_dir_path}/watercluster_{k}_atoms.out'
+        cmd3 = f'mv timer.dat {timer_dir_path}/watercluster_{k}_atoms.time'
+        os.system(f'{cmd1} && {cmd2} && {cmd3}')
+
 def _run_s22(testname, subset, psipath, ncore):
 
     input_dir_path = os.path.join(testname, subset, 's22', 'inputs')
@@ -86,14 +139,19 @@ def _run_s22(testname, subset, psipath, ncore):
 def gen_input_files(database, testname, subset, template_path):
     if database.lower() == 's22':
         _gen_inputs_s22(testname, subset, template_path)
+    elif database.lower() == 'watercluster':
+        _gen_inputs_watercluster(testname, subset, template_path)
     else:
         raise Exception(f"Database {database} is currently not available!")
 
 def run_jobs(database, testname, subset, psipath, ncore):
     if os.path.isfile('timer.dat'):
         os.system('rm timer.dat')
+
     if database.lower() == 's22':
         _run_s22(testname, subset, psipath, ncore)
+    elif database.lower() == 'watercluster':
+        _run_watercluster(testname, subset, template_path)
     else:
         raise Exception(f"Database {database} is currently not available!")
 
